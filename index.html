@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+<title>Dé de table</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dé">
+<meta name="theme-color" content="#082219">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout : un plateau de feutre plein écran, le dé au centre, résultat et historique en bas */
+:root {
+  --felt: #12443a;
+  --felt-deep: #071e18;
+  --ivory: #f4f0e6;
+  --ivory-shade: #d6cfbd;
+  --pip: #1c1e24;
+  --ace: #c6352d;
+  --ink: #eaf3ee;
+  --muted: #93b5a7;
+  --line: rgba(234, 243, 238, 0.14);
+  /* Couleurs des boules par dizaine, comme au loto */
+  --b0: #f0c443;
+  --b1: #3b7dd8;
+  --b2: #d8453d;
+  --b3: #34a362;
+  --b4: #8a58d4;
+  --display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --s: min(46vw, 30vh, 200px);
+  color-scheme: dark;
+}
+html { box-sizing: border-box; height: 100%; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(120% 85% at 50% 42%, var(--felt) 0%, var(--felt-deep) 100%) var(--felt-deep);
+  color: var(--ink);
+  font-family: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 22px;
+  cursor: pointer;
+  outline: none;
+}
+.app:focus-visible { box-shadow: inset 0 0 0 3px var(--muted); }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.top strong { font-family: var(--display); font-weight: 800; letter-spacing: 0.08em; color: var(--ink); font-size: 14px; }
+.top span { font-variant-numeric: tabular-nums; }
+.top-right { display: flex; align-items: center; gap: 12px; }
+.sound {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.sound span { display: inline-flex; align-items: center; gap: 6px; }
+.sound svg { width: 16px; height: 16px; }
+.sound .off { display: none; }
+.sound[aria-pressed="false"] { color: var(--muted); }
+.sound[aria-pressed="false"] .on { display: none; }
+.sound[aria-pressed="false"] .off { display: inline-flex; }
+.sound:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+.levels {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.levels button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+.levels button[aria-pressed="true"] { background: var(--ivory); color: var(--pip); font-weight: 600; }
+.levels button:disabled { cursor: default; }
+.levels button:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+
+/* Niveau 2 : boule de loto */
+.ball-spot { position: relative; width: var(--s); height: var(--s); }
+.ball {
+  --ball: var(--b0);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ball);
+  background:
+    radial-gradient(circle at 33% 26%, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 50% 50%, var(--ball) 52%, color-mix(in srgb, var(--ball) 55%, #000) 100%);
+  box-shadow: inset 0 calc(var(--s) * -0.04) calc(var(--s) * 0.08) rgba(0, 0, 0, 0.3);
+}
+.ball-num {
+  display: grid;
+  place-items: center;
+  width: 56%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--ivory);
+  color: var(--pip);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: calc(var(--s) * 0.24);
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.ball.go { animation: wobble 1.5s cubic-bezier(0.3, 0, 0.4, 1) both; }
+@keyframes wobble {
+  0%   { transform: rotate(0deg) translateY(0); }
+  15%  { transform: rotate(-28deg) translateY(calc(var(--s) * -0.12)); }
+  30%  { transform: rotate(22deg) translateY(0); }
+  45%  { transform: rotate(-14deg) translateY(calc(var(--s) * -0.05)); }
+  60%  { transform: rotate(9deg) translateY(0); }
+  75%  { transform: rotate(-4deg); }
+  88%  { transform: rotate(2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Scène 3D */
+.stage {
+  display: grid;
+  place-items: center;
+  perspective: 1000px;
+  min-height: 0;
+}
+.table-spot {
+  position: relative;
+  width: var(--s);
+  height: var(--s);
+}
+.shadow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--s) * -0.32);
+  width: calc(var(--s) * 1.15);
+  height: calc(var(--s) * 0.26);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+.toss {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: none;
+}
+.cube {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 1.5s cubic-bezier(0.12, 0.62, 0.22, 1);
+}
+.face, .core {
+  position: absolute;
+  inset: 0;
+}
+.face {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 13%;
+  border-radius: 17%;
+  background:
+    radial-gradient(130% 130% at 30% 25%, #fffdf7 0%, var(--ivory) 45%, var(--ivory-shade) 100%);
+  box-shadow: inset 0 0 calc(var(--s) * 0.08) rgba(90, 70, 40, 0.22);
+}
+.core { background: var(--ivory-shade); inset: 3%; border-radius: 14%; }
+.pip {
+  width: 64%;
+  aspect-ratio: 1;
+  place-self: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #454852 0%, var(--pip) 62%);
+  box-shadow: inset 0 calc(var(--s) * 0.012) calc(var(--s) * 0.02) rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.pip.ace {
+  width: 92%;
+  background: radial-gradient(circle at 38% 32%, #e2574f 0%, var(--ace) 62%);
+}
+
+.go { animation: toss 1.5s cubic-bezier(0.3, 0, 0.4, 1) both; }
+.go-shadow { animation: shade 1.5s cubic-bezier(0.3, 0, 0.4, 1) both; }
+@keyframes toss {
+  0%   { transform: translateY(0); }
+  20%  { transform: translateY(calc(var(--s) * -0.85)); }
+  42%  { transform: translateY(0); }
+  56%  { transform: translateY(calc(var(--s) * -0.28)); }
+  70%  { transform: translateY(0); }
+  79%  { transform: translateY(calc(var(--s) * -0.07)); }
+  87%, 100% { transform: translateY(0); }
+}
+@keyframes shade {
+  0%   { transform: translateX(-50%) scale(1); opacity: 1; }
+  20%  { transform: translateX(-50%) scale(0.55); opacity: 0.45; }
+  42%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  56%  { transform: translateX(-50%) scale(0.8); opacity: 0.75; }
+  70%, 100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+/* Bas de l'écran */
+.bottom {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+.result {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 92px;
+}
+.result small {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.result b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s, transform 0.25s;
+}
+.result.waiting b { opacity: 0.25; transform: scale(0.85); }
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 100%;
+}
+.history i {
+  font-style: normal;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.history i:first-child { background: var(--ivory); color: var(--pip); border-color: var(--ivory); }
+.history em { font-style: normal; font-size: 13px; color: var(--muted); line-height: 30px; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .go, .go-shadow, .ball.go { animation: none; }
+}
+</style>
+
+<main class="app" id="app" tabindex="0" aria-label="Touchez l'écran pour lancer">
+  <header class="top">
+    <div class="levels" role="group" aria-label="Niveau">
+      <button type="button" data-level="1" aria-pressed="true">1 · Dé</button>
+      <button type="button" data-level="2" aria-pressed="false">2 · 1 à 49</button>
+    </div>
+    <div class="top-right">
+      <span id="count">0 lancer</span>
+      <button type="button" class="sound" id="sound" aria-pressed="true" aria-label="Couper le son">
+        <span class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Son</span>
+        <span class="off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Muet</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="stage" aria-hidden="true">
+    <div class="table-spot" id="dieScene">
+      <div class="shadow" id="shadow"></div>
+      <div class="toss" id="toss">
+        <div class="tilt">
+          <div class="cube" id="cube"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ball-spot" id="ballScene" hidden>
+      <div class="shadow"></div>
+      <div class="ball" id="ball"><span class="ball-num" id="ballNum">?</span></div>
+    </div>
+  </section>
+
+  <footer class="bottom">
+    <div class="result" id="result" aria-live="polite">
+      <small id="label">Prêt</small>
+      <b id="value">?</b>
+    </div>
+    <div class="history" id="history"><em>Vos derniers lancers s'afficheront ici</em></div>
+    <p class="hint" id="hint">Touchez n'importe où pour lancer le dé</p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const SPIN_MS = 1500;
+  const app = document.getElementById('app');
+  const cube = document.getElementById('cube');
+  const toss = document.getElementById('toss');
+  const shadow = document.getElementById('shadow');
+  const resultEl = document.getElementById('result');
+  const labelEl = document.getElementById('label');
+  const valueEl = document.getElementById('value');
+  const historyEl = document.getElementById('history');
+  const countEl = document.getElementById('count');
+  const hintEl = document.getElementById('hint');
+  const dieScene = document.getElementById('dieScene');
+  const ballScene = document.getElementById('ballScene');
+  const ball = document.getElementById('ball');
+  const ballNum = document.getElementById('ballNum');
+  const levelBtns = [...document.querySelectorAll('.levels button')];
+
+  // Faces opposées : 1/6, 2/5, 3/4 (somme 7, comme un vrai dé)
+  const half = 'calc(var(--s) / 2)';
+  const faces = [
+    { v: 1, t: `translateZ(${half})` },
+    { v: 6, t: `rotateY(180deg) translateZ(${half})` },
+    { v: 2, t: `rotateY(90deg) translateZ(${half})` },
+    { v: 5, t: `rotateY(-90deg) translateZ(${half})` },
+    { v: 3, t: `rotateX(90deg) translateZ(${half})` },
+    { v: 4, t: `rotateX(-90deg) translateZ(${half})` }
+  ];
+  // Cases occupées dans une grille 3x3 (1 à 9, lecture ligne par ligne)
+  const layout = { 1: [5], 2: [3, 7], 3: [3, 5, 7], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+  // Rotation du dé qui amène chaque face vers l'avant
+  const show = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
+
+  ['0', 'rotateY(90deg)', 'rotateX(90deg)'].forEach(r => {
+    const c = document.createElement('div');
+    c.className = 'core';
+    if (r !== '0') c.style.transform = r;
+    cube.appendChild(c);
+  });
+  faces.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'face';
+    el.style.transform = f.t;
+    layout[f.v].forEach(cell => {
+      const p = document.createElement('span');
+      p.className = 'pip' + (f.v === 1 ? ' ace' : '');
+      p.style.gridRow = Math.ceil(cell / 3);
+      p.style.gridColumn = ((cell - 1) % 3) + 1;
+      el.appendChild(p);
+    });
+    cube.appendChild(el);
+  });
+
+  function rnd(n) {
+    if (window.crypto && crypto.getRandomValues) {
+      const limit = Math.floor(0x100000000 / n) * n;
+      const a = new Uint32Array(1);
+      do { crypto.getRandomValues(a); } while (a[0] >= limit);
+      return a[0] % n;
+    }
+    return Math.floor(Math.random() * n);
+  }
+  const mod = (a, m) => ((a % m) + m) % m;
+  const sign = () => (rnd(2) ? 1 : -1);
+
+  let rx = 0, ry = 0, rz = 0;
+  let rolling = false;
+  let started = false;
+  let level = 1;
+  try { if (localStorage.getItem('de-niveau') === '2') level = 2; } catch (err) {}
+  const counts = { 1: 0, 2: 0 };
+  const histories = { 1: [], 2: [] };
+
+  function apply() {
+    cube.style.transform = `rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  }
+
+  // Position de départ : le 5 vers l'avant
+  rx = show[5][0]; ry = show[5][1];
+  apply();
+
+  let wakeLock = null;
+  function keepAwake() {
+    if (wakeLock || !navigator.wakeLock) return;
+    navigator.wakeLock.request('screen').then(l => {
+      wakeLock = l;
+      l.addEventListener('release', () => { wakeLock = null; });
+    }).catch(() => {});
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && started) keepAwake();
+  });
+
+  // Son : chocs du dé sur le tapis, synthétisés avec Web Audio
+  const soundBtn = document.getElementById('sound');
+  let soundOn = true;
+  try { soundOn = localStorage.getItem('de-son') !== 'off'; } catch (err) {}
+  function renderSound() {
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    soundBtn.setAttribute('aria-label', soundOn ? 'Couper le son' : 'Activer le son');
+  }
+  renderSound();
+
+  let ctx = null, noise = null;
+  function audio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      // Sur iPhone, permet d'entendre le son même en mode silencieux (iOS 17+)
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (err) {}
+      ctx = new AC();
+      noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+      const d = noise.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return ctx;
+  }
+  function knock(t, vol) {
+    // Claquement de l'arête du dé
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1500 + Math.random() * 1500;
+    bp.Q.value = 1.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.9 * vol, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    src.connect(bp).connect(g).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + 0.12);
+    // Choc sourd sur le tapis
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(170, t);
+    o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.6 * vol, t + 0.005);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(g2).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + 0.18);
+  }
+  // Instants des rebonds (en secondes), calés sur l'animation de 1,5 s
+  const hits = [[0.63, 1], [1.05, 0.6], [1.3, 0.35], [1.39, 0.16], [1.46, 0.1]];
+  const tapHits = [[0.01, 0.5]];
+
+  // Le son est d'abord fabriqué en fichier WAV puis joué par un lecteur audio :
+  // sur iPhone, contrairement à Web Audio, il reste audible en mode silencieux.
+  const RATE = 22050;
+  function renderWav(list, dur) {
+    const n = Math.floor(RATE * dur);
+    const buf = new Float32Array(n);
+    list.forEach(([start, vol, kind]) => {
+      const tick = kind === 't';
+      const s0 = Math.floor(start * RATE);
+      const f = tick ? 3000 + Math.random() * 900 : 1500 + Math.random() * 1500, q = 1.4;
+      const w0 = 2 * Math.PI * f / RATE, alpha = Math.sin(w0) / (2 * q), a0 = 1 + alpha;
+      const b0 = alpha / a0, b2 = -alpha / a0, a1 = -2 * Math.cos(w0) / a0, a2 = (1 - alpha) / a0;
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0, phase = 0;
+      const len = Math.floor(0.18 * RATE);
+      for (let i = 0; i < len && s0 + i < n; i++) {
+        const t = i / RATE;
+        const x = Math.random() * 2 - 1;
+        const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = y;
+        const click = y * 3.2 * vol * Math.exp(-t / (tick ? 0.004 : 0.012));
+        const freq = 170 * Math.pow(70 / 170, Math.min(t / 0.12, 1));
+        phase += 2 * Math.PI * freq / RATE;
+        const thump = tick ? 0 : Math.sin(phase) * 0.6 * vol * Math.exp(-t / 0.02);
+        buf[s0 + i] += click + thump;
+      }
+    });
+    let peak = 0;
+    for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(buf[i]));
+    const scale = peak > 0.95 ? 0.95 / peak : 1;
+    const bytes = new Uint8Array(44 + n * 2);
+    const v = new DataView(bytes.buffer);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, buf[i] * scale)) * 32767, true);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
+  const rollSound = new Audio(renderWav(hits, 1.6));
+  const tapSound = new Audio(renderWav(tapHits, 0.25));
+  rollSound.preload = 'auto';
+  // Niveau 2 : cliquetis de plus en plus lents, puis la boule qui se pose
+  const drawTicks = [];
+  for (let t = 0.02, dt = 0.045; t < 1.3; t += dt, dt *= 1.13) drawTicks.push(t);
+  const drawHits = drawTicks.map(t => [t, 0.35, 't']).concat([[1.48, 0.8]]);
+  const drawSound = new Audio(renderWav(drawHits, 1.7));
+  drawSound.preload = 'auto';
+  tapSound.preload = 'auto';
+  let mediaOk = true;
+
+  function playSynth(list) {
+    const c = audio();
+    if (!c) return;
+    const now = c.currentTime + 0.02;
+    list.forEach(([s, v]) => knock(now + s, v));
+  }
+  function play(el, list) {
+    if (!soundOn) return;
+    if (mediaOk) {
+      try {
+        el.currentTime = 0;
+        const p = el.play();
+        if (p && p.catch) p.catch(err => {
+          if (err && err.name === 'NotSupportedError') mediaOk = false;
+          if (err && err.name !== 'AbortError') playSynth(list);
+        });
+        return;
+      } catch (err) {
+        mediaOk = false;
+      }
+    }
+    playSynth(list);
+  }
+  function setBall(n) {
+    ballNum.textContent = n;
+    const d = Math.floor(n / 10);
+    ball.style.setProperty('--ball', `var(--b${isNaN(d) ? 0 : Math.min(4, d)})`);
+  }
+
+  const words = {
+    1: { one: 'lancer', many: 'lancers', wait: 'Le dé roule…', hint: "Touchez n'importe où pour lancer le dé", empty: "Vos derniers lancers s'afficheront ici" },
+    2: { one: 'tirage', many: 'tirages', wait: 'Tirage en cours…', hint: "Touchez n'importe où pour tirer un numéro de 1 à 49", empty: "Vos derniers numéros s'afficheront ici" }
+  };
+  function render() {
+    const w = words[level], h = histories[level], c = counts[level];
+    dieScene.hidden = level !== 1;
+    ballScene.hidden = level !== 2;
+    levelBtns.forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.level) === level)));
+    resultEl.classList.remove('waiting');
+    labelEl.textContent = h.length ? 'Résultat' : 'Prêt';
+    valueEl.textContent = h.length ? h[0] : '?';
+    countEl.textContent = c + ' ' + (c > 1 ? w.many : w.one);
+    historyEl.innerHTML = h.length ? h.map(n => `<i>${n}</i>`).join('') : `<em>${w.empty}</em>`;
+    hintEl.textContent = w.hint;
+  }
+  function setLevel(l) {
+    if (rolling || l === level) return;
+    level = l;
+    try { localStorage.setItem('de-niveau', String(l)); } catch (err) {}
+    render();
+  }
+
+  function drawBall() {
+    play(drawSound, drawHits);
+    const v = rnd(49) + 1;
+    drawTicks.forEach(t => setTimeout(() => setBall(rnd(49) + 1), t * 1000));
+    ball.classList.remove('go');
+    void ball.offsetWidth;
+    ball.classList.add('go');
+    return v;
+  }
+
+  function roll() {
+    if (rolling) return;
+    rolling = true;
+    started = true;
+    keepAwake();
+    levelBtns.forEach(b => { b.disabled = true; });
+    const lvl = level;
+    const v = lvl === 1 ? rollDie() : drawBall();
+    resultEl.classList.add('waiting');
+    labelEl.textContent = words[lvl].wait;
+    setTimeout(() => {
+      if (lvl === 2) setBall(v);
+      counts[lvl] += 1;
+      histories[lvl].unshift(v);
+      if (histories[lvl].length > 10) histories[lvl].pop();
+      rolling = false;
+      levelBtns.forEach(b => { b.disabled = false; });
+      render();
+    }, SPIN_MS);
+  }
+
+  function rollDie() {
+    play(rollSound, hits);
+    const v = rnd(6) + 1;
+    const [tx, ty] = show[v];
+    rx = rx - mod(rx, 360) + 360 * (2 + rnd(3)) * sign() + tx;
+    ry = ry - mod(ry, 360) + 360 * (2 + rnd(3)) * sign() + ty;
+    rz = rz - mod(rz, 360) + 360 * rnd(2) * sign() + 90 * rnd(4) + (rnd(17) - 8);
+    apply();
+
+    toss.classList.remove('go');
+    shadow.classList.remove('go-shadow');
+    void toss.offsetWidth;
+    toss.classList.add('go');
+    shadow.classList.add('go-shadow');
+    return v;
+  }
+
+  // Lancer au moment où le doigt se lève : c'est le geste qui autorise le son sur iPhone
+  app.addEventListener('pointerup', e => {
+    if (e.button !== undefined && e.button > 0) return;
+    if (e.target.closest && e.target.closest('button')) return;
+    roll();
+  });
+  app.addEventListener('keydown', e => {
+    if (e.target !== app) return;
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); roll(); }
+  });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  soundBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    soundOn = !soundOn;
+    try { localStorage.setItem('de-son', soundOn ? 'on' : 'off'); } catch (err) {}
+    renderSound();
+    play(tapSound, tapHits);
+  });
+  levelBtns.forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    setLevel(Number(b.dataset.level));
+  }));
+
+  setBall('?');
+  render();
+})();
+</script>
+
+</body>
+</html>
