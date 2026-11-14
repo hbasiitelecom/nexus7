@@ -3,4 +3,4 @@ NEXUS-7 terminal
 
 ## Dé
 
-`index.html` est un dé 3D à utiliser sur iPhone : touchez l'écran, le dé tourne pendant 2 secondes puis s'arrête sur une face tirée au hasard, avec le bruit des rebonds sur le tapis (bouton Son/Muet en haut à droite). Ouvrez la page dans Safari, puis Partager > Sur l'écran d'accueil pour l'utiliser comme une app.
+`index.html` est un dé 3D à utiliser sur iPhone : touchez l'écran, le dé tourne pendant 1,5 seconde puis s'arrête sur une face tirée au hasard, avec le bruit des rebonds sur le tapis (bouton Son/Muet en haut à droite). Ouvrez la page dans Safari, puis Partager > Sur l'écran d'accueil pour l'utiliser comme une app.
