@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+<title>Dé de table</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dé">
+<meta name="theme-color" content="#082219">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout : un plateau de feutre plein écran, le dé au centre, résultat et historique en bas */
+:root {
+  --felt: #12443a;
+  --felt-deep: #071e18;
+  --ivory: #f4f0e6;
+  --ivory-shade: #d6cfbd;
+  --pip: #1c1e24;
+  --ace: #c6352d;
+  --ink: #eaf3ee;
+  --muted: #93b5a7;
+  --line: rgba(234, 243, 238, 0.14);
+  --display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --s: min(46vw, 30vh, 200px);
+  color-scheme: dark;
+}
+html { box-sizing: border-box; height: 100%; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(120% 85% at 50% 42%, var(--felt) 0%, var(--felt-deep) 100%) var(--felt-deep);
+  color: var(--ink);
+  font-family: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 22px;
+  cursor: pointer;
+  outline: none;
+}
+.app:focus-visible { box-shadow: inset 0 0 0 3px var(--muted); }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.top strong { font-family: var(--display); font-weight: 800; letter-spacing: 0.08em; color: var(--ink); font-size: 14px; }
+.top span { font-variant-numeric: tabular-nums; }
+
+/* Scène 3D */
+.stage {
+  display: grid;
+  place-items: center;
+  perspective: 1000px;
+  min-height: 0;
+}
+.table-spot {
+  position: relative;
+  width: var(--s);
+  height: var(--s);
+}
+.shadow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--s) * -0.32);
+  width: calc(var(--s) * 1.15);
+  height: calc(var(--s) * 0.26);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+.toss {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(-24deg) rotateY(30deg);
+}
+.cube {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 2s cubic-bezier(0.12, 0.62, 0.22, 1);
+}
+.face, .core {
+  position: absolute;
+  inset: 0;
+}
+.face {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 13%;
+  border-radius: 17%;
+  background:
+    radial-gradient(130% 130% at 30% 25%, #fffdf7 0%, var(--ivory) 45%, var(--ivory-shade) 100%);
+  box-shadow: inset 0 0 calc(var(--s) * 0.08) rgba(90, 70, 40, 0.22);
+}
+.core { background: var(--ivory-shade); inset: 3%; }
+.pip {
+  width: 64%;
+  aspect-ratio: 1;
+  place-self: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #454852 0%, var(--pip) 62%);
+  box-shadow: inset 0 calc(var(--s) * 0.012) calc(var(--s) * 0.02) rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.pip.ace {
+  width: 92%;
+  background: radial-gradient(circle at 38% 32%, #e2574f 0%, var(--ace) 62%);
+}
+
+.go { animation: toss 2s cubic-bezier(0.3, 0, 0.4, 1) both; }
+.go-shadow { animation: shade 2s cubic-bezier(0.3, 0, 0.4, 1) both; }
+@keyframes toss {
+  0%   { transform: translateY(0); }
+  20%  { transform: translateY(calc(var(--s) * -0.85)); }
+  42%  { transform: translateY(0); }
+  56%  { transform: translateY(calc(var(--s) * -0.28)); }
+  70%  { transform: translateY(0); }
+  79%  { transform: translateY(calc(var(--s) * -0.07)); }
+  87%, 100% { transform: translateY(0); }
+}
+@keyframes shade {
+  0%   { transform: translateX(-50%) scale(1); opacity: 1; }
+  20%  { transform: translateX(-50%) scale(0.55); opacity: 0.45; }
+  42%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  56%  { transform: translateX(-50%) scale(0.8); opacity: 0.75; }
+  70%, 100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+/* Bas de l'écran */
+.bottom {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+.result {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 92px;
+}
+.result small {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.result b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s, transform 0.25s;
+}
+.result.waiting b { opacity: 0.25; transform: scale(0.85); }
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 100%;
+}
+.history i {
+  font-style: normal;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.history i:first-child { background: var(--ivory); color: var(--pip); border-color: var(--ivory); }
+.history em { font-style: normal; font-size: 13px; color: var(--muted); line-height: 30px; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .go, .go-shadow { animation: none; }
+}
+</style>
+
+<main class="app" id="app" tabindex="0" aria-label="Touchez l'écran pour lancer le dé">
+  <header class="top">
+    <strong>Dé</strong>
+    <span id="count">0 lancer</span>
+  </header>
+
+  <section class="stage" aria-hidden="true">
+    <div class="table-spot">
+      <div class="shadow" id="shadow"></div>
+      <div class="toss" id="toss">
+        <div class="tilt">
+          <div class="cube" id="cube"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bottom">
+    <div class="result" id="result" aria-live="polite">
+      <small id="label">Prêt</small>
+      <b id="value">?</b>
+    </div>
+    <div class="history" id="history"><em>Vos derniers lancers s'afficheront ici</em></div>
+    <p class="hint">Touchez n'importe où pour lancer</p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const SPIN_MS = 2000;
+  const app = document.getElementById('app');
+  const cube = document.getElementById('cube');
+  const toss = document.getElementById('toss');
+  const shadow = document.getElementById('shadow');
+  const resultEl = document.getElementById('result');
+  const labelEl = document.getElementById('label');
+  const valueEl = document.getElementById('value');
+  const historyEl = document.getElementById('history');
+  const countEl = document.getElementById('count');
+
+  // Faces opposées : 1/6, 2/5, 3/4 (somme 7, comme un vrai dé)
+  const half = 'calc(var(--s) / 2)';
+  const faces = [
+    { v: 1, t: `translateZ(${half})` },
+    { v: 6, t: `rotateY(180deg) translateZ(${half})` },
+    { v: 2, t: `rotateY(90deg) translateZ(${half})` },
+    { v: 5, t: `rotateY(-90deg) translateZ(${half})` },
+    { v: 3, t: `rotateX(90deg) translateZ(${half})` },
+    { v: 4, t: `rotateX(-90deg) translateZ(${half})` }
+  ];
+  // Cases occupées dans une grille 3x3 (1 à 9, lecture ligne par ligne)
+  const layout = { 1: [5], 2: [3, 7], 3: [3, 5, 7], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+  // Rotation du dé qui amène chaque face vers l'avant
+  const show = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
+
+  ['0', 'rotateY(90deg)', 'rotateX(90deg)'].forEach(r => {
+    const c = document.createElement('div');
+    c.className = 'core';
+    if (r !== '0') c.style.transform = r;
+    cube.appendChild(c);
+  });
+  faces.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'face';
+    el.style.transform = f.t;
+    layout[f.v].forEach(cell => {
+      const p = document.createElement('span');
+      p.className = 'pip' + (f.v === 1 ? ' ace' : '');
+      p.style.gridRow = Math.ceil(cell / 3);
+      p.style.gridColumn = ((cell - 1) % 3) + 1;
+      el.appendChild(p);
+    });
+    cube.appendChild(el);
+  });
+
+  function rnd(n) {
+    if (window.crypto && crypto.getRandomValues) {
+      const limit = Math.floor(0x100000000 / n) * n;
+      const a = new Uint32Array(1);
+      do { crypto.getRandomValues(a); } while (a[0] >= limit);
+      return a[0] % n;
+    }
+    return Math.floor(Math.random() * n);
+  }
+  const mod = (a, m) => ((a % m) + m) % m;
+  const sign = () => (rnd(2) ? 1 : -1);
+
+  let rx = 0, ry = 0, rz = 0;
+  let rolling = false;
+  let count = 0;
+  const history = [];
+
+  function apply() {
+    cube.style.transform = `rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  }
+
+  // Position de départ : le 5 vers l'avant
+  rx = show[5][0]; ry = show[5][1];
+  apply();
+
+  let wakeLock = null;
+  function keepAwake() {
+    if (wakeLock || !navigator.wakeLock) return;
+    navigator.wakeLock.request('screen').then(l => {
+      wakeLock = l;
+      l.addEventListener('release', () => { wakeLock = null; });
+    }).catch(() => {});
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && count > 0) keepAwake();
+  });
+
+  function roll() {
+    if (rolling) return;
+    rolling = true;
+    keepAwake();
+
+    const v = rnd(6) + 1;
+    const [tx, ty] = show[v];
+    rx = rx - mod(rx, 360) + 360 * (2 + rnd(3)) * sign() + tx;
+    ry = ry - mod(ry, 360) + 360 * (2 + rnd(3)) * sign() + ty;
+    rz = rz - mod(rz, 360) + 360 * rnd(2) * sign() + 90 * rnd(4) + (rnd(17) - 8);
+    apply();
+
+    toss.classList.remove('go');
+    shadow.classList.remove('go-shadow');
+    void toss.offsetWidth;
+    toss.classList.add('go');
+    shadow.classList.add('go-shadow');
+
+    resultEl.classList.add('waiting');
+    labelEl.textContent = 'Le dé roule…';
+
+    setTimeout(() => {
+      count += 1;
+      history.unshift(v);
+      if (history.length > 10) history.pop();
+      valueEl.textContent = v;
+      labelEl.textContent = 'Résultat';
+      resultEl.classList.remove('waiting');
+      countEl.textContent = count + (count > 1 ? ' lancers' : ' lancer');
+      historyEl.innerHTML = history.map(n => `<i>${n}</i>`).join('');
+      rolling = false;
+    }, SPIN_MS);
+  }
+
+  app.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button > 0) return;
+    e.preventDefault();
+    roll();
+  });
+  app.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); roll(); }
+  });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+})();
+</script>
+
+</body>
+</html>
