@@ -63,7 +63,7 @@ body {
 .top {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   font-size: 12px;
   letter-spacing: 0.14em;
@@ -72,6 +72,28 @@ body {
 }
 .top strong { font-family: var(--display); font-weight: 800; letter-spacing: 0.08em; color: var(--ink); font-size: 14px; }
 .top span { font-variant-numeric: tabular-nums; }
+.top-right { display: flex; align-items: center; gap: 12px; }
+.sound {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.sound span { display: inline-flex; align-items: center; gap: 6px; }
+.sound svg { width: 16px; height: 16px; }
+.sound .off { display: none; }
+.sound[aria-pressed="false"] { color: var(--muted); }
+.sound[aria-pressed="false"] .on { display: none; }
+.sound[aria-pressed="false"] .off { display: inline-flex; }
+.sound:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
 
 /* Scène 3D */
 .stage {
@@ -220,7 +242,13 @@ body {
 <main class="app" id="app" tabindex="0" aria-label="Touchez l'écran pour lancer le dé">
   <header class="top">
     <strong>Dé</strong>
-    <span id="count">0 lancer</span>
+    <div class="top-right">
+      <span id="count">0 lancer</span>
+      <button type="button" class="sound" id="sound" aria-pressed="true" aria-label="Couper le son">
+        <span class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Son</span>
+        <span class="off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Muet</span>
+      </button>
+    </div>
   </header>
 
   <section class="stage" aria-hidden="true">
@@ -329,10 +357,83 @@ body {
     if (document.visibilityState === 'visible' && count > 0) keepAwake();
   });
 
+  // Son : chocs du dé sur le tapis, synthétisés avec Web Audio
+  const soundBtn = document.getElementById('sound');
+  let soundOn = true;
+  try { soundOn = localStorage.getItem('de-son') !== 'off'; } catch (err) {}
+  function renderSound() {
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    soundBtn.setAttribute('aria-label', soundOn ? 'Couper le son' : 'Activer le son');
+  }
+  renderSound();
+
+  let ctx = null, noise = null;
+  function audio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      // Sur iPhone, permet d'entendre le son même en mode silencieux (iOS 17+)
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (err) {}
+      ctx = new AC();
+      noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+      const d = noise.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return ctx;
+  }
+  function knock(t, vol) {
+    // Claquement de l'arête du dé
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1500 + Math.random() * 1500;
+    bp.Q.value = 1.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.9 * vol, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    src.connect(bp).connect(g).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + 0.12);
+    // Choc sourd sur le tapis
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(170, t);
+    o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.6 * vol, t + 0.005);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(g2).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + 0.18);
+  }
+  // Instants des rebonds (en secondes), calés sur l'animation de 2 s
+  const hits = [[0.84, 1], [1.4, 0.6], [1.74, 0.35], [1.86, 0.16], [1.95, 0.1]];
+  function playRoll() {
+    if (!soundOn) return;
+    const c = audio();
+    if (!c) return;
+    const now = c.currentTime + 0.02;
+    hits.forEach(([s, v]) => knock(now + s, v));
+  }
+  function unlock() {
+    if (!soundOn) return;
+    const c = audio();
+    if (!c) return;
+    const b = c.createBufferSource();
+    b.buffer = c.createBuffer(1, 1, 22050);
+    b.connect(c.destination);
+    b.start(0);
+  }
+
   function roll() {
     if (rolling) return;
     rolling = true;
     keepAwake();
+    playRoll();
 
     const v = rnd(6) + 1;
     const [tx, ty] = show[v];
@@ -365,13 +466,28 @@ body {
 
   app.addEventListener('pointerdown', e => {
     if (e.button !== undefined && e.button > 0) return;
+    if (e.target.closest && e.target.closest('#sound')) return;
     e.preventDefault();
     roll();
   });
   app.addEventListener('keydown', e => {
+    if (e.target !== app) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); roll(); }
   });
   document.addEventListener('gesturestart', e => e.preventDefault());
+  // iOS n'autorise le son qu'après un geste complet (doigt levé)
+  app.addEventListener('touchend', unlock, { passive: true });
+  app.addEventListener('click', unlock);
+  soundBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    soundOn = !soundOn;
+    try { localStorage.setItem('de-son', soundOn ? 'on' : 'off'); } catch (err) {}
+    renderSound();
+    if (soundOn) {
+      unlock();
+      if (ctx) knock(ctx.currentTime + 0.03, 0.5);
+    }
+  });
 })();
 </script>
 
