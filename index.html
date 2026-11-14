@@ -412,22 +412,78 @@ body {
   }
   // Instants des rebonds (en secondes), calés sur l'animation de 2 s
   const hits = [[0.84, 1], [1.4, 0.6], [1.74, 0.35], [1.86, 0.16], [1.95, 0.1]];
-  function playRoll() {
-    if (!soundOn) return;
+  const tapHits = [[0.01, 0.5]];
+
+  // Le son est d'abord fabriqué en fichier WAV puis joué par un lecteur audio :
+  // sur iPhone, contrairement à Web Audio, il reste audible en mode silencieux.
+  const RATE = 22050;
+  function renderWav(list, dur) {
+    const n = Math.floor(RATE * dur);
+    const buf = new Float32Array(n);
+    list.forEach(([start, vol]) => {
+      const s0 = Math.floor(start * RATE);
+      const f = 1500 + Math.random() * 1500, q = 1.4;
+      const w0 = 2 * Math.PI * f / RATE, alpha = Math.sin(w0) / (2 * q), a0 = 1 + alpha;
+      const b0 = alpha / a0, b2 = -alpha / a0, a1 = -2 * Math.cos(w0) / a0, a2 = (1 - alpha) / a0;
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0, phase = 0;
+      const len = Math.floor(0.18 * RATE);
+      for (let i = 0; i < len && s0 + i < n; i++) {
+        const t = i / RATE;
+        const x = Math.random() * 2 - 1;
+        const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = y;
+        const click = y * 3.2 * vol * Math.exp(-t / 0.012);
+        const freq = 170 * Math.pow(70 / 170, Math.min(t / 0.12, 1));
+        phase += 2 * Math.PI * freq / RATE;
+        const thump = Math.sin(phase) * 0.6 * vol * Math.exp(-t / 0.02);
+        buf[s0 + i] += click + thump;
+      }
+    });
+    let peak = 0;
+    for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(buf[i]));
+    const scale = peak > 0.95 ? 0.95 / peak : 1;
+    const bytes = new Uint8Array(44 + n * 2);
+    const v = new DataView(bytes.buffer);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, buf[i] * scale)) * 32767, true);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
+  const rollSound = new Audio(renderWav(hits, 2.1));
+  const tapSound = new Audio(renderWav(tapHits, 0.25));
+  rollSound.preload = 'auto';
+  tapSound.preload = 'auto';
+  let mediaOk = true;
+
+  function playSynth(list) {
     const c = audio();
     if (!c) return;
     const now = c.currentTime + 0.02;
-    hits.forEach(([s, v]) => knock(now + s, v));
+    list.forEach(([s, v]) => knock(now + s, v));
   }
-  function unlock() {
+  function play(el, list) {
     if (!soundOn) return;
-    const c = audio();
-    if (!c) return;
-    const b = c.createBufferSource();
-    b.buffer = c.createBuffer(1, 1, 22050);
-    b.connect(c.destination);
-    b.start(0);
+    if (mediaOk) {
+      try {
+        el.currentTime = 0;
+        const p = el.play();
+        if (p && p.catch) p.catch(err => {
+          if (err && err.name === 'NotSupportedError') mediaOk = false;
+          if (err && err.name !== 'AbortError') playSynth(list);
+        });
+        return;
+      } catch (err) {
+        mediaOk = false;
+      }
+    }
+    playSynth(list);
   }
+  function playRoll() { play(rollSound, hits); }
 
   function roll() {
     if (rolling) return;
@@ -464,10 +520,10 @@ body {
     }, SPIN_MS);
   }
 
-  app.addEventListener('pointerdown', e => {
+  // Lancer au moment où le doigt se lève : c'est le geste qui autorise le son sur iPhone
+  app.addEventListener('pointerup', e => {
     if (e.button !== undefined && e.button > 0) return;
     if (e.target.closest && e.target.closest('#sound')) return;
-    e.preventDefault();
     roll();
   });
   app.addEventListener('keydown', e => {
@@ -475,18 +531,12 @@ body {
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); roll(); }
   });
   document.addEventListener('gesturestart', e => e.preventDefault());
-  // iOS n'autorise le son qu'après un geste complet (doigt levé)
-  app.addEventListener('touchend', unlock, { passive: true });
-  app.addEventListener('click', unlock);
   soundBtn.addEventListener('click', e => {
     e.stopPropagation();
     soundOn = !soundOn;
     try { localStorage.setItem('de-son', soundOn ? 'on' : 'off'); } catch (err) {}
     renderSound();
-    if (soundOn) {
-      unlock();
-      if (ctx) knock(ctx.currentTime + 0.03, 0.5);
-    }
+    play(tapSound, tapHits);
   });
 })();
 </script>
